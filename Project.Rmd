@@ -130,47 +130,79 @@ prediction <- predict(svm.model, svm_data)
 
 tab <- table(pred = prediction, true = data$Class) 
 print('contingency table')
+tab
 ```
 ```{r SVM iterate}
 source("C:/Users/kirubha/Desktop/Dataset/functions_w6.R")
 library(e1071)
 
-for(cost in c(0.01, 10, 100))
+
+library(caret)
+set.seed(1)
+fold <- createFolds(data$Class, k=10)
+
+for(deg in c(1:8))
 {
-  svm_data = data[,c(3,16)]
-  svm.model <- svm(svm_data, y=data$Class, kernel="linear", type="C-classification", scale=FALSE, cost = cost)
-  prediction <- predict(svm.model, svm_data) 
-  
   svm.TP <- svm.TN <- svm.FP <- svm.FN <- c()
-  truth <- data$Class
-  
-  svm.TP <- c(svm.TP, sum((truth == prediction)[truth == "1"]))
-  svm.TN <- c(svm.TN, sum((truth == prediction)[truth == "-1"]))
-  svm.FP <- c(svm.FP, sum((truth != prediction)[truth == "-1"]))
-  svm.FN <- c(svm.FN, sum((truth != prediction)[truth == "1"]))
-  
+  for(k in 1:length(fold))
+  {
+    svm_data = data[fold[[k]],3:16]
+    svm.model <- svm(svm_data, y=data[fold[[k]],]$Class, kernel="polynomial", degree=deg, type="C-classification",cost=1)
+    prediction <- predict(svm.model, svm_data) 
+    
+    truth <- data[fold[[k]],]$Class
+    
+    svm.TP <- c(svm.TP, sum((truth == prediction)[truth == "1"]))
+    svm.TN <- c(svm.TN, sum((truth == prediction)[truth == "-1"]))
+    svm.FP <- c(svm.FP, sum((truth != prediction)[truth == "-1"]))
+    svm.FN <- c(svm.FN, sum((truth != prediction)[truth == "1"]))
+  }
   evaluate(svm.TN, svm.FP, svm.TP, svm.FN)
   print("\n")
 }
+```
+```{r LDA iterate}
+source("C:/Users/kirubha/Desktop/Dataset/functions_w6.R")
+library(e1071)
+library(MASS)
+library(mlbench)
+library(class)
+library(caret)
 
-for(deg in c(1,2))
+set.seed(5)
+fold <- createFolds(data$Class, k=10)
+
+lda.TP <- lda.TN <- lda.FP <- lda.FN <- c()
+knn.TP <- knn.TN <- knn.FP <- knn.FN <- c()
+
+
+
+for(k in 1:length(fold))
 {
-  svm_data = data[,c(3,16)]
-  svm.model <- svm(svm_data, y=data$Class, kernel="polynomial", degree=deg, type="C-classification")
-  prediction <- predict(svm.model, svm_data) 
+  lda.model <- lda(Class~., data=data[-fold[[k]],3:17])
+  pred.probs <- predict(lda.model, newdata=data[fold[[k]],3:17])$posterior[,"1"]
+  preds <- ifelse(pred.probs > 0.5, "1", "-1")
   
-  svm.TP <- svm.TN <- svm.FP <- svm.FN <- c()
-  truth <- data$Class
-  
-  svm.TP <- c(svm.TP, sum((truth == prediction)[truth == "1"]))
-  svm.TN <- c(svm.TN, sum((truth == prediction)[truth == "-1"]))
-  svm.FP <- c(svm.FP, sum((truth != prediction)[truth == "-1"]))
-  svm.FN <- c(svm.FN, sum((truth != prediction)[truth == "1"]))
-  
-  evaluate(svm.TN, svm.FP, svm.TP, svm.FN)
-  print("\n")
-}
+  truth <- data[fold[[k]],]$Class
 
+  lda.TP <- c(lda.TP, sum((truth == preds)[truth == "1"]))
+  lda.TN <- c(lda.TN, sum((truth == preds)[truth == "-1"]))
+  lda.FP <- c(lda.FP, sum((truth != preds)[truth == "-1"]))
+  lda.FN <- c(lda.FN, sum((truth != preds)[truth == "1"]))
+  
+  preds <- knn(data[-fold[[k]],3:17], data[fold[[k]],3:17], data$Class[-fold[[k]]], k=5)
+  knn.TP <- c(knn.TP, sum((truth == preds)[truth == "1"]))
+  knn.TN <- c(knn.TN, sum((truth == preds)[truth == "-1"]))
+  knn.FP <- c(knn.FP, sum((truth != preds)[truth == "-1"]))
+  knn.FN <- c(knn.FN, sum((truth != preds)[truth == "1"]))
+}
+evaluate(lda.TN, lda.FP, lda.TP, lda.FN)
+print("")
+evaluate(knn.TN, knn.FP, knn.TP, knn.FN)
+
+  
+```
+```{r KNN iterate}
 
 ```
 
