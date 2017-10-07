@@ -11,14 +11,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r set working directory and read data,,results='asis'}
- 
 setwd("C:/Users/kirubha/Desktop/Dataset/Data/Project")
 raw_data = read.csv("InsulinPhospho.txt",header = TRUE, sep = "\t")
-data = raw_data
-akt_data = raw_data
-mTOR_data = raw_data
-
-
+data <- akt_data <- mTOR_data <- raw_data
 
 akt_substrate = read.csv("Akt_substrates.txt",header = FALSE, sep = "\t")
 mTOR_substrate = read.csv("mTOR_substrates.txt",header = FALSE, sep = "\t")
@@ -27,12 +22,24 @@ data$Class = ifelse(is.element(data$Identifier,akt_substrate[,1]),1,ifelse(is.el
 
 akt_data$Class = ifelse(is.element(akt_data$Identifier,akt_substrate[,1]),1,-1)
 mTOR_data$Class = ifelse(is.element(mTOR_data$Identifier,mTOR_substrate[,1]),1,-1)
-
+summary(data)
 ```
 
 ```{r Plot data for visualization}
+length(data)
 
-subset(data, Class == 1)$AUC
+for(i in (4:length(data)-1)){
+  
+  xval_unlab <- subset(data, Class == 0)[[i]]
+  xval_akt <- subset(data, Class == 1)[[i]]
+  xval_mTOR <- subset(data, Class == -1)[[i]]
+  
+  #AUC vs Avg.Fold
+  plot(x=xval_unlab,y=subset(data, Class == 0)$Avg.Fold,col="yellow",pch=13,xlim=c(0,1),ylim=c(-1,5))
+  points(x=xval_akt,y=subset(data, Class == 1)$Avg.Fold,col="red",pch=13)
+  points(x=xval_mTOR,y=subset(data, Class == -1)$Avg.Fold,col="blue",pch=13)
+  
+}
 
 #AUC vs Avg.Fold
 plot(x=subset(data, Class == 0)$AUC,y=subset(data, Class == 0)$Avg.Fold,col="yellow",pch=13,xlim=c(0,1),ylim=c(-1,5))
@@ -89,6 +96,7 @@ data = akt_data.rose
 plot(x=subset(data, Class == -1)$AUC,y=subset(data, Class == -1)$Avg.Fold,col="yellow",pch=13,xlim=c(0,1),ylim=c(-1,5))
 points(x=subset(data, Class == 1)$AUC,y=subset(data, Class == 1)$Avg.Fold,col="red",pch=13)
 
+
 ```
 
 ```{r SMOTE UPsampling}
@@ -97,6 +105,7 @@ points(x=subset(data, Class == 1)$AUC,y=subset(data, Class == 1)$Avg.Fold,col="r
 
 
 ```{r SVM}
+library(e1071)
 
 svm_data = data[,c(3,4)]
 svm.model <- svm(svm_data, y=data$Class, kernel="linear", type="C-classification", scale=FALSE, cost = 0.01)
@@ -121,6 +130,48 @@ prediction <- predict(svm.model, svm_data)
 
 tab <- table(pred = prediction, true = data$Class) 
 print('contingency table')
-tab
 ```
+```{r SVM iterate}
+source("C:/Users/kirubha/Desktop/Dataset/functions_w6.R")
+library(e1071)
+
+for(cost in c(0.01, 10, 100))
+{
+  svm_data = data[,c(3,16)]
+  svm.model <- svm(svm_data, y=data$Class, kernel="linear", type="C-classification", scale=FALSE, cost = cost)
+  prediction <- predict(svm.model, svm_data) 
+  
+  svm.TP <- svm.TN <- svm.FP <- svm.FN <- c()
+  truth <- data$Class
+  
+  svm.TP <- c(svm.TP, sum((truth == prediction)[truth == "1"]))
+  svm.TN <- c(svm.TN, sum((truth == prediction)[truth == "-1"]))
+  svm.FP <- c(svm.FP, sum((truth != prediction)[truth == "-1"]))
+  svm.FN <- c(svm.FN, sum((truth != prediction)[truth == "1"]))
+  
+  evaluate(svm.TN, svm.FP, svm.TP, svm.FN)
+  print("\n")
+}
+
+for(deg in c(1,2))
+{
+  svm_data = data[,c(3,16)]
+  svm.model <- svm(svm_data, y=data$Class, kernel="polynomial", degree=deg, type="C-classification")
+  prediction <- predict(svm.model, svm_data) 
+  
+  svm.TP <- svm.TN <- svm.FP <- svm.FN <- c()
+  truth <- data$Class
+  
+  svm.TP <- c(svm.TP, sum((truth == prediction)[truth == "1"]))
+  svm.TN <- c(svm.TN, sum((truth == prediction)[truth == "-1"]))
+  svm.FP <- c(svm.FP, sum((truth != prediction)[truth == "-1"]))
+  svm.FN <- c(svm.FN, sum((truth != prediction)[truth == "1"]))
+  
+  evaluate(svm.TN, svm.FP, svm.TP, svm.FN)
+  print("\n")
+}
+
+
+```
+
 
