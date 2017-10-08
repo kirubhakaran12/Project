@@ -7,10 +7,20 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+source("C:/Users/kirubha/Desktop/Dataset/functions_w6.R")
+library(e1071)
+library(MASS)
+library(mlbench)
+library(class)
+library(caret)
+library(ROSE)
+
 ```
 
 
 ```{r set working directory and read data,,results='asis'}
+
 setwd("C:/Users/kirubha/Desktop/Dataset/Data/Project")
 raw_data = read.csv("InsulinPhospho.txt",header = TRUE, sep = "\t")
 data <- akt_data <- mTOR_data <- raw_data
@@ -22,7 +32,7 @@ data$Class = ifelse(is.element(data$Identifier,akt_substrate[,1]),1,ifelse(is.el
 
 akt_data$Class = ifelse(is.element(akt_data$Identifier,akt_substrate[,1]),1,-1)
 mTOR_data$Class = ifelse(is.element(mTOR_data$Identifier,mTOR_substrate[,1]),1,-1)
-summary(data)
+
 ```
 
 ```{r Plot data for visualization}
@@ -74,20 +84,9 @@ for(i in 3:12){
 
 #sum(subset(data,Class == 1)$Class)
 ```
-```{r Naive Bayes Classifier}
-
-library(e1071)
-nrow(akt_data)
-model <- naiveBayes(Class ~ ., data = akt_data[,3:length(akt_data)])
-attributes(model)
-summary(model)
-print(model)
-model$tables
-?naiveBayes
-```
 
 ```{r ROSE UPsampling}
-library(ROSE)
+
 akt_data.rose <- ROSE(Class~., data=akt_data, seed=3)$data
 table(akt_data.rose$Class)
 
@@ -132,42 +131,41 @@ tab <- table(pred = prediction, true = data$Class)
 print('contingency table')
 tab
 ```
+
 ```{r SVM iterate}
-source("C:/Users/kirubha/Desktop/Dataset/functions_w6.R")
-library(e1071)
 
-
-library(caret)
 set.seed(1)
 fold <- createFolds(data$Class, k=10)
 
-for(deg in c(1:8))
+svm_model <- function(dat, cl)
 {
-  svm.TP <- svm.TN <- svm.FP <- svm.FN <- c()
-  for(k in 1:length(fold))
+  for(deg in c(1:8))
   {
-    svm_data = data[fold[[k]],3:16]
-    svm.model <- svm(svm_data, y=data[fold[[k]],]$Class, kernel="polynomial", degree=deg, type="C-classification",cost=1)
-    prediction <- predict(svm.model, svm_data) 
-    
-    truth <- data[fold[[k]],]$Class
-    
-    svm.TP <- c(svm.TP, sum((truth == prediction)[truth == "1"]))
-    svm.TN <- c(svm.TN, sum((truth == prediction)[truth == "-1"]))
-    svm.FP <- c(svm.FP, sum((truth != prediction)[truth == "-1"]))
-    svm.FN <- c(svm.FN, sum((truth != prediction)[truth == "1"]))
+    svm.TP <- svm.TN <- svm.FP <- svm.FN <- c()
+    for(k in 1:length(fold))
+    {
+      svm_data <- dat
+      svm.model <- svm(svm_data, y=cl, kernel="polynomial", degree=deg, type="C-classification",cost=1)
+      prediction <- predict(svm.model, svm_data) 
+      
+      truth <- cl
+      
+      svm.TP <- c(svm.TP, sum((truth == prediction)[truth == "1"]))
+      svm.TN <- c(svm.TN, sum((truth == prediction)[truth == "-1"]))
+      svm.FP <- c(svm.FP, sum((truth != prediction)[truth == "-1"]))
+      svm.FN <- c(svm.FN, sum((truth != prediction)[truth == "1"]))
+    }
+    evaluate(svm.TN, svm.FP, svm.TP, svm.FN)
+    print("")
   }
-  evaluate(svm.TN, svm.FP, svm.TP, svm.FN)
-  print("\n")
-}
+}  
+
+dat <- data[fold[[k]],3:16]
+cl <- data[fold[[k]],]$Class
+
+svm_model(dat,cl)
 ```
 ```{r LDA iterate}
-source("C:/Users/kirubha/Desktop/Dataset/functions_w6.R")
-library(e1071)
-library(MASS)
-library(mlbench)
-library(class)
-library(caret)
 
 set.seed(5)
 fold <- createFolds(data$Class, k=10)
@@ -202,8 +200,16 @@ evaluate(knn.TN, knn.FP, knn.TP, knn.FN)
 
   
 ```
-```{r KNN iterate}
+```{r Naive Bayes Classifier}
 
+library(e1071)
+nrow(akt_data)
+model <- naiveBayes(Class ~ ., data = akt_data[,3:length(akt_data)])
+attributes(model)
+summary(model)
+print(model)
+model$tables
+?naiveBayes
 ```
 
 
