@@ -8,8 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-#source("C:/Users/kirubha/Desktop/Dataset/functions_w6.R")
-source("C:/Users/106961/Desktop/R/Data/functions_w6.R")
+source("C:/Users/kirubha/Desktop/project/R Project/Project/functions_w6.R")
+#source("C:/Users/106961/Desktop/R/Data/functions_w6.R")
 library(e1071)
 library(MASS)
 library(mlbench)
@@ -22,8 +22,8 @@ library(ROSE)
 
 ```{r set working directory and read data,,results='asis'}
 
-#setwd("C:/Users/kirubha/Desktop/Dataset/Data/Project")
-setwd("C:/Users/106961/Desktop/R/Data")
+setwd("C:/Users/kirubha/Desktop/Dataset/Data/Project")
+#setwd("C:/Users/106961/Desktop/R/Data")
 
 raw_data = read.csv("InsulinPhospho.txt",header = TRUE, sep = "\t")
 data <- akt_data <- mTOR_data <- raw_data
