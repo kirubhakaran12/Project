@@ -16,6 +16,8 @@ library(mlbench)
 library(class)
 library(caret)
 library(ROSE)
+library(sqldf)
+library(xlsx)
 
 ```
 
@@ -36,6 +38,8 @@ data$Class = ifelse(is.element(data$Identifier,akt_substrate[,1]),1,ifelse(is.el
 akt_data$Class = ifelse(is.element(akt_data$Identifier,akt_substrate[,1]),1,-1)
 mTOR_data$Class = ifelse(is.element(mTOR_data$Identifier,mTOR_substrate[,1]),1,-1)
 
+pred_2016 = read.csv("Prediction_2016.csv",header = TRUE, sep = ",")
+
 ```
 
 ```{r ROSE UPsampling}
@@ -54,13 +58,13 @@ points(x=subset(data, Class == 1)$AUC,y=subset(data, Class == 1)$Avg.Fold,col="r
 
 svm_model <- function(dat, cl)
 {
-  for(deg in c(1:10))
+  for(deg in c(1:3))
   {
     svm.TP <- svm.TN <- svm.FP <- svm.FN <- c()
     for(k in 1:length(fold))
     {
       svm_data <- dat[fold[[k]],]
-      svm.model <<- svm(svm_data, y=cl[fold[[k]]], kernel="polynomial", degree=deg, type="C-classification",cost=1)
+      svm.model <<- svm(svm_data, y=cl[fold[[k]]], kernel="polynomial", degree=deg, type="C-classification",cost=1,probability = TRUE)
       prediction <- predict(svm.model, svm_data) 
       
       truth <- cl[fold[[k]]]
@@ -70,8 +74,37 @@ svm_model <- function(dat, cl)
       svm.FP <- c(svm.FP, sum((truth != prediction)[truth == "-1"]))
       svm.FN <- c(svm.FN, sum((truth != prediction)[truth == "1"]))
     }
-    res <- cbind(evaluate(svm.TN, svm.FP, svm.TP, svm.FN),Method = paste("SVM - Degree:",deg))
+    res <- cbind(evaluate(svm.TN, svm.FP, svm.TP, svm.FN),Method = paste("SVM - Degree:",deg),Model_Identifier = mod_cnt, No.Features = ncol(dat), Features = toString(colnames(dat),sep=', '))
     metrics <<- rbind(metrics,res)
+    model_fn[[mod_cnt]] <<- svm.model
+    mod_cnt <<- mod_cnt + 1
+  }
+}  
+
+```
+
+```{r SVM Bagging iterate}
+
+
+
+svm_model_bag <- function(dat)
+{
+  positive_class = subset(dat,Class == 1)[,2:ncol(dat)]
+  negative_class = subset(dat,Class == -1)[,2:ncol(dat)]
+
+  for(deg in c(3:3))
+  {
+   
+    for(k in 1:50)
+    {
+      ind <- sample(x=nrow(negative_class),size = nrow(positive_class),replace = FALSE)
+      svm_data <- rbind(positive_class,negative_class[ind,])
+    
+      svm.model <<- svm(svm_data[,1:(ncol(svm_data)-1)], y=svm_data[,ncol(svm_data)], kernel="polynomial", degree=deg, type="C-classification",cost=1,probability = TRUE)
+      prediction <- predict(svm.model, dat[,2:(ncol(dat)-1)], probability=TRUE) 
+      svm_pred_Prob <- cbind(akt_data[1],prob=attr(prediction, "probabilities")[,1])
+      prob_pred <<- rbind(prob_pred, svm_pred_Prob)
+    }
   }
 }  
 
@@ -96,8 +129,10 @@ lda_model <- function(dat,cl)
     lda.FP <- c(lda.FP, sum((truth != preds)[truth == "-1"]))
     lda.FN <- c(lda.FN, sum((truth != preds)[truth == "1"]))
   }
-  res <- cbind(evaluate(lda.TN, lda.FP, lda.TP, lda.FN),Method = paste("LDA"))
+  res <- cbind(evaluate(lda.TN, lda.FP, lda.TP, lda.FN),Method = paste("LDA"),Model_Identifier = mod_cnt, No.Features = ncol(dat), Features = toString(colnames(dat),sep=', '))
   metrics <<- rbind(metrics,res)
+  model_fn[[mod_cnt]] <<- lda.model
+  mod_cnt <<- mod_cnt + 1
 }
 
 ```
@@ -109,7 +144,7 @@ knn_model <- function(dat,cl)
   knn.TP <- knn.TN <- knn.FP <- knn.FN <- c()
   dat = cbind(dat,Class=cl)
   
-  for(n in c(1:10))
+  for(n in c(1,10,20,50,100))
   {
     for(k in 1:length(fold))
     {
@@ -120,10 +155,24 @@ knn_model <- function(dat,cl)
       knn.FP <- c(knn.FP, sum((truth != preds)[truth == "-1"]))
       knn.FN <- c(knn.FN, sum((truth != preds)[truth == "1"]))
     }
-    res <- cbind(evaluate(knn.TN, knn.FP, knn.TP, knn.FN),Method = paste("KNN, Nearest neighbour:",n))
+    res <- cbind(evaluate(knn.TN, knn.FP, knn.TP, knn.FN),Method = paste("KNN, Nearest neighbour:",n),Model_Identifier = mod_cnt, No.Features = ncol(dat), Features = toString(colnames(dat),sep=', '))
     metrics <<- rbind(metrics,res)
+    model_fn[[mod_cnt]] <<- preds
+    mod_cnt <<- mod_cnt + 1
   }
 }
+
+```
+
+```{r Feature Prioratization }
+
+feature.pvalues <- c()
+for(i in 3:16) 
+{
+  feature.pvalues <- c(feature.pvalues, t.test(subset(data, Class == 1)[[i]], subset(data, Class == -1)[[i]])$p.value)
+}
+names(feature.pvalues) <- colnames(data[,3:16])
+filtered.features2 <- names(sort(feature.pvalues))
 
 ```
 
@@ -132,37 +181,62 @@ knn_model <- function(dat,cl)
 set.seed(1)
 fold <- createFolds(data$Class, k=10)
 
+metrics <<- data.frame()
+mod_cnt <<- 1
+model_fn <<- c()
 
 model <- function(dat,cl)
 {
-  metrics <<- data.frame()
   svm_model(dat,cl)
   lda_model(dat,cl)
   knn_model(dat,cl)
 }
 
-#Model 1
 
-dat <- data[,3:16]
-cl <- data$Class
-
-model(dat,cl)
-
-
-##End of Model 1
-
-#Model 2
-
-dat <- data[,3:12]
-cl <- data$Class
-
-model(dat,cl)
-
-##End of Model 2
+for(i in c(1:length(filtered.features2)))
+{
+  idn <- data[1]
+  dat <- data.frame(data[,filtered.features2[1:i]])
+  cl <- data$Class
+  model(dat,cl)
+}
 
 metrics
+
+metrics[grep("SVM", metrics$Method),]
+
+##bagging
+
+prob_pred <- c()
+svm_pred_Prob <- c()
+svm_model_bag(akt_data[,c(1,3:(3+i))])
+svm_bag_prob <- sqldf('SELECT Identifier, AVG(prob) AS B FROM prob_pred GROUP BY Identifier')
+
+#Use Model
+
+BIC(use_model)
+use_model <- model_fn[[3]]
+prediction <- predict(use_model, dat,probability = TRUE) 
+new_prob <- cbind(idn,dat,(attr(prediction, "probabilities")))
+
+new_prob[order(new_prob$"1"),]
+
+new_prob()
+
 ```
 
+```{r Model comparison}
+
+old_prediction <- data.frame(Identifier = paste(toupper(pred_2016[,1]),";",pred_2016[,2],";",sep=""),pred_2016[,c("Full.model.predict","Motif.predict","Phosphoproteome.predict")])
+svm_bag_prob
+
+output <- merge(x = old_prediction, y = svm_bag_prob, by = "Identifier", all = TRUE)
+write.xlsx(output, "C:/Users/106961/Desktop/R/Data/output.xlsx")
+
+write.csv(output, "C:/Users/kirubha/Desktop/Dataset/Data/Project/output.csv")
+
+
+```
 
 
 
